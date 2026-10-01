@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registro del Patrimonio Cultural · San Andrés de Giles</title>
+<meta name="description" content="Registro Oficial del Patrimonio Cultural de San Andrés de Giles (PCSAG): mapa de bienes declarados, fichas patrimoniales, parcelario actual y mensuras históricas del AHGBA.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23233b2f'/%3E%3Cpath d='M8 24V13l8-5 8 5v11h-5v-6h-6v6z' fill='%23e9c46a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#233b2f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/styles.css?v=2.2">
+<script>
+  // Limpieza inmediata de Service Worker y caché antigua
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      for (let r of regs) r.unregister();
+    });
+  }
+  if ('caches' in window) {
+    caches.keys().then(names => {
+      for (let n of names) caches.delete(n);
+    });
+  }
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+<header class="top">
+  <a class="brand" href="#/">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" class="b-bg"/><path d="M8 24V13l8-5 8 5v11h-5v-6h-6v6z" class="b-fg"/></svg>
+    <span><b>Patrimonio Cultural</b><small>San Andrés de Giles · PCSAG</small></span>
+  </a>
+  <nav class="tabs" aria-label="Secciones">
+    <a href="#/" data-r="inicio">Inicio</a>
+    <a href="#/mapa" data-r="mapa">Mapa</a>
+    <a href="#/fichas" data-r="fichas">Fichas</a>
+    <a href="#/gestion" data-r="gestion">Gestión y Control</a>
+    <a href="#/itinerarios" data-r="itinerarios">Itinerarios</a>
+    <a href="#/calendario" data-r="calendario">Calendario</a>
+    <a href="#/normativa" data-r="normativa">Normativa</a>
+    <a href="#/acerca" data-r="acerca">Método y hallazgos</a>
+  </nav>
+  <button class="icon-btn" id="themeBtn" title="Cambiar tema" aria-label="Cambiar tema claro u oscuro">
+    <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+  </button>
+</header>
+
+<main id="main">
+  <!-- INICIO -->
+  <section class="view" id="v-inicio">
+    <div class="hero">
+      <div class="hero-in">
+        <p class="kicker">Comisión Municipal Asesora de Patrimonio Cultural · Ord. 2182/19</p>
+        <h1>Registro del Patrimonio Cultural<br><em>de San Andrés de Giles</em></h1>
+        <p class="lede">Inventario nominal de los bienes declarados por el Honorable Concejo Deliberante desde 1988, reconstruido inciso por inciso a partir del texto de cada ordenanza, con su localización sobre imagen satelital, el parcelario vigente y las mensuras históricas del Archivo de Geodesia.</p>
+        <div class="hero-cta">
+          <a class="btn primary" href="#/mapa">Abrir el mapa</a>
+          <a class="btn" href="#/fichas">Consultar fichas</a>
+          <a class="btn" href="#/itinerarios">Recorrer itinerarios</a>
+          <a class="btn" href="#/calendario">Calendario y fiestas</a>
+        </div>
+      </div>
+      <dl class="stats" id="stats"></dl>
+    </div>
+    <div class="wrap">
+      <div class="grid2">
+        <article class="panel">
+          <h2>Categorías del régimen</h2>
+          <p class="muted">Art. 4º de la Ord. 2182/19, ampliado por la Ord. 2446/21. Un bien puede tener doble encuadre.</p>
+          <ul class="cats" id="catList"></ul>
+        </article>
+        <article class="panel">
+          <h2>Declaratorias por año</h2>
+          <p class="muted">Asientos del Registro Oficial según el año de la ordenanza de origen.</p>
+          <div id="chartYears" class="chart"></div>
+        </article>
+      </div>
+      <article class="panel">
+        <h2>Localidades</h2>
+        <div class="loc-strip" id="locStrip"></div>
+      </article>
+      <article class="panel quote">
+        <p>Un registro no es sólo un listado: es la decisión colectiva sobre qué merece durar. Cada asiento de este inventario abre una pregunta — qué se protege, para quién, y qué queda fuera de la mirada normativa.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- MAPA -->
+  <section class="view" id="v-mapa">
+    <div class="map-shell">
+      <aside class="side" id="side">
+        <div class="side-head">
+          <input type="search" id="mapSearch" placeholder="Buscar bien, ordenanza o nomenclatura (I-A-95-2)…" aria-label="Buscar en el mapa">
+          <div class="chips" id="mapFilters"></div>
+        </div>
+        <div class="side-list" id="mapList"></div>
+        
+      </aside>
+      <div class="map-wrap">
+        <div id="map" role="region" aria-label="Mapa del patrimonio"></div>
+        <button class="side-toggle" id="sideToggle" aria-label="Mostrar u ocultar lista">☰ Lista</button>
+        <div class="map-tools" id="mapTools">
+          <button class="tool-btn" id="gpsBtn" title="Mi ubicación GPS" aria-label="Mi ubicación GPS">
+            <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+          </button>
+          <button class="tool-btn" id="measureBtn" title="Medir distancias" aria-label="Medir distancias">
+            <svg viewBox="0 0 24 24"><path d="M19.5 3.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5zM19 19.09H5V4.91h14v14.18zM7 7h2v2H7zm0 4h2v2H7zm0 4h2v2H7zm4-8h6v2h-6zm0 4h6v2h-6zm0 4h6v2h-6z"/></svg>
+          </button>
+          <button class="tool-btn" id="exportBtn" title="Exportar datos espaciales (GeoJSON/KML)" aria-label="Exportar datos espaciales">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          </button>
+        </div>
+        <div class="itinerary-banner" id="itineraryBanner" hidden></div>
+        <div class="measure-bar" id="measureBar" hidden></div>
+        <div class="gps-bar" id="gpsBar" hidden></div>
+        <div class="layers" id="layers">
+          <h3>Capas</h3>
+          <label><input type="checkbox" data-l="bienes" checked> Bienes declarados</label>
+          <label><input type="checkbox" data-l="parcelario"> Parcelario 2024 <span class="note" id="parcNote"></span></label>
+          <label><input type="checkbox" data-l="mensuras"> Mensuras históricas AHGBA</label>
+          <label><input type="checkbox" data-l="caminos"> Caminos de las mensuras</label>
+          <label><input type="checkbox" data-l="estancias"> Estancias, puestos y postas</label>
+          <label class="op">Opacidad mensuras <input type="range" id="mensOp" min="0" max="100" value="55"></label>
+          <h3>Base</h3>
+          <label><input type="radio" name="base" value="sat" checked> Satelital + nombres</label>
+          <label><input type="radio" name="base" value="satp"> Satelital puro</label>
+          <label><input type="radio" name="base" value="osm"> Callejero</label>
+          <div class="legend" id="legend"></div>
+        </div>
+        
+      </div>
+    </div>
+  </section>
+
+  <!-- FICHAS -->
+  <section class="view" id="v-fichas">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="kicker">Catálogo</p>
+        <h1>Fichas patrimoniales</h1>
+        <p class="muted">Una ficha por asiento del Registro Oficial (103 bienes con ordenanza) y por cada asiento sin respaldo de ordenanza (12).</p>
+      </header>
+      <div class="filters" id="fFilters">
+        <input type="search" id="fSearch" placeholder="Buscar por nombre, ubicación, ordenanza…" aria-label="Buscar fichas">
+        <select id="fLoc" aria-label="Localidad"></select>
+        <select id="fCat" aria-label="Categoría"></select>
+        <select id="fTipo" aria-label="Tipo de bien"></select>
+        <select id="fLst" aria-label="Localización"></select>
+        <select id="fEstado" aria-label="Estado registral">
+          <option value="">Todos los estados</option>
+          <option value="Registro Definitivo">Registro Definitivo</option>
+          <option value="Registro Preventivo">Registro Preventivo</option>
+          <option value="sin">Sin respaldo de ordenanza</option>
+        </select>
+        <select id="fEpoca" aria-label="Época de declaratoria">
+          <option value="">Todas las épocas</option>
+          <option value="1988-1999">1988 - 1999 (Inicios del régimen)</option>
+          <option value="2000-2018">2000 - 2018 (Consolidación)</option>
+          <option value="2019-2024">2019 - 2024 (Ord. 2182/19 y actual)</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="fSin"> Incluir sin ordenanza</label>
+        <button class="btn small" id="fReset" title="Limpiar filtros">Restablecer</button>
+      </div>
+      <p class="count" id="fCount"></p>
+      <div class="cards" id="cards"></div>
+    </div>
+  </section>
+
+  <!-- FICHA -->
+  <section class="view" id="v-ficha"><div class="wrap" id="ficha"></div></section>
+
+  <!-- GESTIÓN Y CONTROL (CMAPCSAG) -->
+  <section class="view" id="v-gestion">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="kicker">Instrumento de Gestión y Seguimiento · CMAPCSAG</p>
+        <h1>Tablero de Gestión y Control del Registro</h1>
+        <p class="muted">Instrumento institucional para el seguimiento de declaratorias, verificación catastral, expedientes y regularizaciones de la Comisión Municipal Asesora de Patrimonio Cultural (Ord. 2182/19 y modif. 2446/21).</p>
+      </header>
+
+      <div class="gestion-nav">
+        <button class="gtab-btn on" data-gtab="tablero">📊 Tablero de Indicadores</button>
+        <button class="gtab-btn" data-gtab="alertas">⚠️ Semáforo y Alertas</button>
+        <button class="gtab-btn" data-gtab="auditoria">🔍 Auditoría del Corpus</button>
+        <button class="gtab-btn" data-gtab="carga">➕ Carga de Expedientes y Ordenanzas</button>
+        <button class="gtab-btn" data-gtab="informes">📄 Informes y Descargas PDF</button>
+      </div>
+
+      <!-- Pestaña 1: Tablero -->
+      <div class="gtab-content on" id="gtab-tablero">
+        <div class="kpi-grid" id="kpiGrid"></div>
+        <div class="grid2 mt">
+          <article class="panel">
+            <h2>Distribución por Categoría (Art. 4º)</h2>
+            <div id="catDistribution"></div>
+          </article>
+          <article class="panel">
+            <h2>Calidad y Respaldo del Asiento Registral</h2>
+            <div id="qualityDistribution"></div>
+          </article>
+        </div>
+        <article class="panel mt">
+          <h2>Distribución Territorial en el Partido</h2>
+          <div id="locDistribution"></div>
+        </article>
+      </div>
+
+      <!-- Pestaña 2: Alertas -->
+      <div class="gtab-content" id="gtab-alertas">
+        <div class="alert-box red">
+          <h3>🔴 Alerta 1: Asientos pendientes de sanción de Ordenanza (12 bienes)</h3>
+          <p>El art. 8º de la Ord. 2182/19 impone que el Registro Definitivo contendrá los bienes declarados por Ordenanza del H.C.D. Los siguientes 12 asientos invocan dictámenes, decretos del D.E. o declaraciones de otra jurisdicción; requieren la sanción de ordenanza individual para perfeccionar su estado registral:</p>
+          <div id="alertSinOrdList"></div>
+        </div>
+
+        <div class="alert-box yellow mt">
+          <h3>🟡 Alerta 2: Nomenclatura catastral a verificar con ARBA (45 bienes)</h3>
+          <p>Bienes cuya nomenclatura catastral no consta en el texto literal de la ordenanza de origen y fue tomada de la planilla 2024. Debe cotejarse con la partida de ARBA y plano de mensura antes de emitir certificados registrales o aplicar la exención tributaria del art. 15º.</p>
+          <div id="alertCatVerifList"></div>
+        </div>
+
+        <div class="alert-box blue mt">
+          <h3>🔵 Alerta 3: Notificación fehaciente al Titular de Dominio (Art. 8º)</h3>
+          <p>Para la plena oponibilidad registral de las restricciones constructivas y el acceso a los estímulos de preservación del art. 15º, la norma exige la notificación fehaciente al titular de dominio de cada inmueble declarado.</p>
+        </div>
+      </div>
+
+      <!-- Pestaña 3: Auditoría -->
+      <div class="gtab-content" id="gtab-auditoria">
+        <article class="panel">
+          <h2>Auditoría del Corpus Normativo (Cotejo Planilla 2024)</h2>
+          <p class="muted">Hallazgos y regularizaciones metodológicas aplicadas sobre el articulado de las 47 ordenanzas declaratorias:</p>
+          <div id="auditList"></div>
+        </article>
+
+        <article class="panel mt">
+          <h2>Solicitudes con Dictamen Desfavorable</h2>
+          <p class="muted">Inmuebles evaluados por la Comisión Asesora que no reunieron las condiciones para su declaratoria patrimonial:</p>
+          <div id="desfList"></div>
+        </article>
+      </div>
+
+      <!-- Pestaña: Carga de Expedientes y Ordenanzas -->
+      <div class="gtab-content" id="gtab-carga">
+        <div class="grid2">
+          <!-- Formulario 1: Nuevo Expediente en Estudio -->
+          <article class="panel">
+            <div class="panel-head">
+              <h2>📁 1. Cargar Nuevo Expediente a Declarar</h2>
+              <span class="pill c2">Mesa de Entradas · Registro Preventivo</span>
+            </div>
+            <p class="muted">Registra una solicitud de particulares, entidades o concejales para su evaluación por la Comisión Municipal Asesora (Art. 8º Ord. 2182/19):</p>
+            
+            <form id="formNuevoExpediente" class="form-gestion">
+              <div class="form-row">
+                <label>Nº de Expediente Administrativo:
+                  <input type="text" id="expNumero" placeholder="Ej. Expte. HCD 4102-124/2026" required>
+                </label>
+                <label>Iniciador / Solicitante:
+                  <input type="text" id="expIniciador" placeholder="Ej. Vecinos de Azcuénaga / CMAPCSAG" required>
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>Denominación del Bien propuesto:
+                  <input type="text" id="expNombre" placeholder="Ej. Almacén de Ramos Generales 'El Progreso'" required>
+                </label>
+                <label>Localidad / Paraje:
+                  <select id="expLocalidad" required>
+                    <option value="San Andrés de Giles">San Andrés de Giles</option>
+                    <option value="Azcuénaga">Azcuénaga</option>
+                    <option value="Cucullú">Cucullú</option>
+                    <option value="Villa Ruiz">Villa Ruiz</option>
+                    <option value="Villa Espil">Villa Espil</option>
+                    <option value="Solís">Solís</option>
+                    <option value="Tuyutí">Tuyutí</option>
+                    <option value="Franklin">Franklin</option>
+                    <option value="Rural / Todo el Partido">Rural / Todo el Partido</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>Ubicación / Dirección:
+                  <input type="text" id="expUbicacion" placeholder="Ej. Av. Scully y Av. Morgan">
+                </label>
+                <label>Nomenclatura Catastral y Partida (si se conoce):
+                  <input type="text" id="expCatastro" placeholder="Ej. Circ. II, Secc. B, Mz. 14, Parc. 3 · Partida 083-001234">
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>Categoría propuesta (Art. 4º):
+                  <select id="expCategoria" required>
+                    <option value="Histórico-Simbólico">Histórico-Simbólico</option>
+                    <option value="Artístico-Arquitectónico">Artístico-Arquitectónico</option>
+                    <option value="Urbanístico-Ambiental">Urbanístico-Ambiental</option>
+                    <option value="Patrimonio Inmaterial">Manifestación del Patrimonio Inmaterial</option>
+                  </select>
+                </label>
+                <label>Tipo de bien:
+                  <select id="expTipo" required>
+                    <option value="Inmueble">Inmueble / Arquitectura</option>
+                    <option value="Espacio urbano / Paisaje">Espacio urbano / Paisaje</option>
+                    <option value="Monumento / Escultura">Monumento / Escultura</option>
+                    <option value="Mueble / Colección">Mueble / Colección histórica</option>
+                    <option value="Sitio histórico">Sitio histórico / Arqueológico</option>
+                    <option value="Patrimonio Inmaterial">Patrimonio Inmaterial / Saber tradicional</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>Estado del Trámite / Dictamen de la Comisión:
+                  <select id="expEstado" required>
+                    <option value="En estudio de Comisión">🟡 En estudio técnico de la Comisión</option>
+                    <option value="Con Registro Preventivo">🟠 Con Registro Preventivo de no innovar (Art. 8º)</option>
+                    <option value="Con Dictamen Favorable">🟢 Con Dictamen Favorable (Elevado al HCD)</option>
+                    <option value="Con Dictamen Desfavorable">🔴 Con Dictamen Desfavorable (Rechazado)</option>
+                  </select>
+                </label>
+                <label>Coordenadas (Latitud, Longitud) [Opcional]:
+                  <input type="text" id="expCoords" placeholder="-34.445123, -59.442111">
+                </label>
+              </div>
+
+              <label>Fundamentación preliminar del valor patrimonial:
+                <textarea id="expFundamento" rows="3" placeholder="Descripción histórica, arquitectónica o testimonial que justifica el inicio de actuaciones..." required></textarea>
+              </label>
+
+              <button type="submit" class="btn primary mt">📥 Registrar Expediente en el Sistema</button>
+            </form>
+          </article>
+
+          <!-- Formulario 2: Nueva Ordenanza Sancionada -->
+          <article class="panel">
+            <div class="panel-head">
+              <h2>⚖️ 2. Cargar Nueva Ordenanza Sancionada</h2>
+              <span class="pill c3">H.C.D. · Registro Definitivo</span>
+            </div>
+            <p class="muted">Incorpora un bien al Registro Definitivo o perfecciona un asiento sin ordenanza formal con el instrumento sancionado por el H.C.D.:</p>
+
+            <form id="formNuevaOrdenanza" class="form-gestion">
+              <label>Modalidad de Incorporación:
+                <select id="ordModalidad" required>
+                  <option value="perfeccionar">Asignar Ordenanza a un Asiento Existente (Regularización)</option>
+                  <option value="nuevo">Declarar un Nuevo Bien directamente por Ordenanza</option>
+                </select>
+              </label>
+
+              <div id="ordGrupoAsiento">
+                <label>Seleccionar Asiento o Expediente a perfeccionar:
+                  <select id="ordAsientoSelect"></select>
+                </label>
+              </div>
+
+              <div id="ordGrupoNuevoBien" style="display:none">
+                <div class="form-row">
+                  <label>Denominación del Nuevo Bien:
+                    <input type="text" id="ordNuevoNombre" placeholder="Ej. Antigua Usina Eléctrica Municipal">
+                  </label>
+                  <label>Localidad:
+                    <select id="ordNuevaLoc">
+                      <option value="San Andrés de Giles">San Andrés de Giles</option>
+                      <option value="Azcuénaga">Azcuénaga</option>
+                      <option value="Cucullú">Cucullú</option>
+                      <option value="Villa Ruiz">Villa Ruiz</option>
+                      <option value="Villa Espil">Villa Espil</option>
+                      <option value="Solís">Solís</option>
+                      <option value="Tuyutí">Tuyutí</option>
+                      <option value="Franklin">Franklin</option>
+                      <option value="Rural / Todo el Partido">Rural / Todo el Partido</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>Ubicación / Dirección:
+                    <input type="text" id="ordNuevaUbi" placeholder="Ej. Calle 25 de Mayo 123">
+                  </label>
+                  <label>Categoría (Art. 4º):
+                    <select id="ordNuevaCat">
+                      <option value="Histórico-Simbólico">Histórico-Simbólico</option>
+                      <option value="Artístico-Arquitectónico">Artístico-Arquitectónico</option>
+                      <option value="Urbanístico-Ambiental">Urbanístico-Ambiental</option>
+                      <option value="Patrimonio Inmaterial">Manifestación del Patrimonio Inmaterial</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <label>Número y Año de la Ordenanza:
+                  <input type="text" id="ordNumero" placeholder="Ej. Ordenanza 2650/26" required>
+                </label>
+                <label>Año de Sanción:
+                  <input type="number" id="ordAnio" min="1980" max="2035" value="2026" required>
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>Artículo e Inciso dispositivo:
+                  <input type="text" id="ordArticulo" placeholder="Ej. Art. 1º inc. a" required>
+                </label>
+                <label>Decreto de Promulgación del D.E.:
+                  <input type="text" id="ordDecreto" placeholder="Ej. Decreto 412/26">
+                </label>
+              </div>
+
+              <div class="form-row">
+                <label>Nomenclatura Catastral Oficial (según Ordenanza):
+                  <input type="text" id="ordCatastro" placeholder="Ej. Circ. I, Secc. A, Mz. 10, Parc. 2">
+                </label>
+                <label>Expediente H.C.D. del que surge:
+                  <input type="text" id="ordExpte" placeholder="Ej. Expte. HCD 4102-98/2026">
+                </label>
+              </div>
+
+              <label>Texto exacto del Fundamento / Considerandos de la Ordenanza:
+                <textarea id="ordFundamento" rows="3" placeholder="Transcripción textual del articulado o considerandos que fundamentan la declaratoria..." required></textarea>
+              </label>
+
+              <button type="submit" class="btn primary mt">⚖️ Promulgar e Incorporar al Registro Definitivo</button>
+            </form>
+          </article>
+        </div>
+
+        <!-- Tabla de Novedades y Expedientes en Trámite -->
+        <article class="panel mt">
+          <div class="panel-head">
+            <h2>📋 Movimientos y Expedientes Registrados Localmente</h2>
+            <div style="display:flex;gap:8px">
+              <button class="btn small" id="btnExportarGestionJSON">💾 Exportar Base Actualizada (JSON)</button>
+              <button class="btn small ghost" id="btnRestablecerGestion">↺ Restablecer Base Oficial</button>
+            </div>
+          </div>
+          <p class="muted">Lista de actuaciones ingresadas durante la sesión de trabajo. Quedan guardadas en el navegador y pueden exportarse para su posterior incorporación a la planilla del H.C.D.:</p>
+          <div id="tablaMovimientosGestion"></div>
+        </article>
+      </div>
+
+      <!-- Pestaña 4: Informes y Descargas PDF -->
+      <div class="gtab-content" id="gtab-informes">
+        <article class="panel">
+          <h2>Documentación y Compendios Oficiales para Descarga</h2>
+          <p class="muted">Instrumentos normativos compilados para la gestión administrativa del H.C.D., el Departamento Ejecutivo y la Comisión:</p>
+          <div class="doc-download-grid">
+            <div class="doc-card">
+              <div class="doc-icon">📄</div>
+              <div class="doc-info">
+                <b>Compendio Oficial del Patrimonio Cultural SAG (PDF)</b>
+                <p>Documento completo con las 103 declaratorias, articulado exacto, decretos, fundamentos, tablero de control y marco normativo.</p>
+                <a class="btn primary small" href="pdf/Compendio_Oficial_Patrimonio_SAG_2026.pdf" download="Compendio_Oficial_Patrimonio_SAG_2026.pdf" target="_blank">Descargar Compendio Oficial (PDF)</a>
+              </div>
+            </div>
+            <div class="doc-card">
+              <div class="doc-icon">📊</div>
+              <div class="doc-info">
+                <b>Registro Oficial y Tablero de Control (Excel .xlsx)</b>
+                <p>Planilla oficial con las 24 columnas registrales, fórmulas del tablero, auditoría y cruces catastrales.</p>
+                <a class="btn small" href="https://drive.google.com/file/d/1XZ29h01B83ZPbdamb4VxPYDy-smERt-w/view?usp=drivesdk" target="_blank" rel="noopener">Abrir en Google Drive</a>
+              </div>
+            </div>
+            <div class="doc-card">
+              <div class="doc-icon">🗺️</div>
+              <div class="doc-info">
+                <b>Capas Espaciales Georreferenciadas (GeoJSON / SIG)</b>
+                <p>114 geometrías de bienes declarados y parcelas para su uso en QGIS, ArcGIS o sistemas territoriales municipales.</p>
+                <button class="btn small" id="btnExportGeoJSONGestion">Descargar GeoJSON Oficial</button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ITINERARIOS -->
+  <section class="view" id="v-itinerarios">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="kicker">Circuitos autoguiados y recorridos territoriales</p>
+        <h1>Itinerarios patrimoniales</h1>
+        <p class="muted">Recorridos temáticos para descubrir el patrimonio histórico, arquitectónico y rural de San Andrés de Giles a pie, en bicicleta o en vehículo.</p>
+      </header>
+
+      <div class="itin-nav">
+        <button class="itin-tab-btn on" data-itab="curados">Circuitos destacados</button>
+        <button class="itin-tab-btn" data-itab="generador">Generador a medida</button>
+      </div>
+
+      <div class="itin-tab-content on" id="itab-curados">
+        <div class="itin-grid" id="curatedList"></div>
+      </div>
+
+      <div class="itin-tab-content" id="itab-generador">
+        <div class="panel">
+          <h2>Generar un itinerario a tu medida</h2>
+          <p class="muted">Elegí la localidad, el modo de transporte y las categorías de interés para calcular una ruta optimizada entre sitios patrimoniales.</p>
+          <div class="custom-itin-form">
+            <div class="form-row">
+              <label><b>Localidad / Zona</b>
+                <select id="genLoc">
+                  <option value="">Todo el Partido de San Andrés de Giles</option>
+                  <option value="San Andrés de Giles" selected>San Andrés de Giles (Casco Urbano)</option>
+                  <option value="Azcuénaga">Azcuénaga</option>
+                  <option value="Cucullú">Cucullú</option>
+                  <option value="Villa Ruiz">Villa Ruiz</option>
+                  <option value="Villa Espil">Villa Espil</option>
+                  <option value="Solís">Solís</option>
+                </select>
+              </label>
+              <label><b>Modo de recorrido</b>
+                <select id="genModo">
+                  <option value="walk" selected>🚶 Peatonal (A pie / Caminata)</option>
+                  <option value="bike">🚲 Bicicleta</option>
+                  <option value="moto">🏍️ Moto</option>
+                  <option value="car">🚗 Auto</option>
+                </select>
+              </label>
+              <label><b>Categoría prioritaria</b>
+                <select id="genCat">
+                  <option value="">Todas las categorías</option>
+                  <option value="1">Histórico-Simbólico</option>
+                  <option value="2">Artístico-Arquitectónico</option>
+                  <option value="3">Urbanístico-Ambiental</option>
+                  <option value="4">Patrimonio Inmaterial</option>
+                </select>
+              </label>
+              <label><b>Cantidad máxima de paradas</b>
+                <select id="genCount">
+                  <option value="5">5 paradas (~1 hora)</option>
+                  <option value="8" selected>8 paradas (~2 horas)</option>
+                  <option value="12">12 paradas (Medio día)</option>
+                  <option value="99">Todas las paradas posibles</option>
+                </select>
+              </label>
+            </div>
+            <button class="btn primary" id="genBtn" style="margin-top:14px">⚡ Calcular itinerario optimizado</button>
+          </div>
+          <div id="genResult" class="gen-result" style="margin-top:24px" hidden></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CALENDARIO -->
+  <section class="view" id="v-calendario">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="kicker">Patrimonio vivo, tradiciones y efemérides</p>
+        <h1>Calendario de fiestas y celebraciones</h1>
+        <p class="muted">Agenda anual de festividades patronales, fiestas populares gastronómicas, conmemoraciones y vigilias comunitarias de San Andrés de Giles.</p>
+      </header>
+
+      <div class="cal-controls">
+        <div class="filters">
+          <select id="calMes" aria-label="Filtrar por mes">
+            <option value="">Todos los meses</option>
+            <option value="1">Enero</option>
+            <option value="2">Febrero</option>
+            <option value="3">Marzo</option>
+            <option value="4">Abril</option>
+            <option value="5">Mayo</option>
+            <option value="6">Junio</option>
+            <option value="7">Julio</option>
+            <option value="8">Agosto</option>
+            <option value="9">Septiembre</option>
+            <option value="10">Octubre</option>
+            <option value="11">Noviembre</option>
+            <option value="12">Diciembre</option>
+          </select>
+          <select id="calTipo" aria-label="Tipo de celebración">
+            <option value="">Todo tipo de celebración</option>
+            <option value="Fiesta popular">Fiestas populares y gastronómicas</option>
+            <option value="Fiesta patronal">Fiestas patronales</option>
+            <option value="Patrimonio inmaterial">Patrimonio inmaterial y vigilias</option>
+            <option value="Efeméride histórica">Efemérides históricas</option>
+          </select>
+          <select id="calLoc" aria-label="Localidad">
+            <option value="">Todas las localidades</option>
+            <option value="San Andrés de Giles">San Andrés de Giles</option>
+            <option value="Azcuénaga">Azcuénaga</option>
+            <option value="Cucullú">Cucullú</option>
+            <option value="Villa Ruiz">Villa Ruiz</option>
+            <option value="Villa Espil">Villa Espil</option>
+            <option value="Solís">Solís</option>
+          </select>
+          <button class="btn small" id="exportAllIcs" title="Descargar todo el calendario a tu dispositivo">📅 Descargar año completo (.ics)</button>
+        </div>
+      </div>
+
+      <div class="cal-list" id="calList"></div>
+    </div>
+  </section>
+
+  <!-- NORMATIVA -->
+  <section class="view" id="v-normativa">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="kicker">Marco normativo</p>
+        <h1>Ordenanzas y régimen</h1>
+        <p class="muted">Régimen orgánico y ordenanzas declaratorias del H.C.D., con el número de asientos que cada una genera en el Registro.</p>
+      </header>
+      <div id="normas"></div>
+      <h2 class="mt">Solicitudes con dictamen desfavorable</h2>
+      <div id="desf"></div>
+    </div>
+  </section>
+
+  <!-- ACERCA -->
+  <section class="view" id="v-acerca">
+    <div class="wrap prose" id="acerca"></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>Registro Oficial del Patrimonio Cultural de San Andrés de Giles · Ord. 2182/19 (mod. 2446/21) · Datos: Registro Oficial PCSAG, KML de lugares declarados, Parcelario ARBA/COU 2024, Mensuras AHGBA. Imágenes: Esri World Imagery, © OpenStreetMap.</p>
+</footer>
+<nav class="bottom-nav no-print" aria-label="Navegación móvil">
+  <a href="#/" data-r="inicio">
+    <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    <span>Inicio</span>
+  </a>
+  <a href="#/mapa" data-r="mapa">
+    <svg viewBox="0 0 24 24"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+    <span>Mapa</span>
+  </a>
+  <a href="#/fichas" data-r="fichas">
+    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+    <span>Fichas</span>
+  </a>
+  <a href="#/gestion" data-r="gestion">
+    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14h-2v-4h2v4zm0-6h-2V7h2v4zm4 6h-2v-7h2v7zm-8 0H6v-2h2v2z"/></svg>
+    <span>Gestión</span>
+  </a>
+  <a href="#/itinerarios" data-r="itinerarios">
+    <svg viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></svg>
+    <span>Itinerarios</span>
+  </a>
+  <a href="#/calendario" data-r="calendario">
+    <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg>
+    <span>Agenda</span>
+  </a>
+</nav>
+
+<div id="toast" class="toast" role="alert" aria-live="polite" hidden></div>
+
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/app.js?v=2.2"></script>
+</body>
+</html>
