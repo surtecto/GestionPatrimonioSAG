@@ -1958,8 +1958,6 @@ boot().catch(err => {
     main.insertAdjacentHTML('afterbegin', `<div class="wrap"><div class="box warn"><b>No se pudieron cargar los datos.</b><br>Detalle: <code>${esc(err.message || String(err))}</code><br><br>Si estás en GitHub Pages, asegurate de que los cambios estén sincronizados y forzá la recarga con <code>Ctrl + F5</code> (o <code>Cmd + Shift + R</code>) para limpiar la caché del navegador.</div></div>`);
   }
 });
-})();
-
 
 /* ------------ gestión y control (CMAPCSAG) ------------ */
 function renderGestion() {
@@ -2388,3 +2386,5 @@ function renderGestion() {
     expBtn.onclick = () => exportGeoJSON(BIENES);
   }
 }
+
+})();
