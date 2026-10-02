@@ -878,3 +878,23 @@ body.map-on .foot{display:none}
 @media (max-width: 600px) {
   .form-row { grid-template-columns: 1fr; }
 }
+
+/* Dropzone de Carga Word */
+.dropzone {
+  border: 2px dashed var(--line-2);
+  border-radius: var(--r);
+  padding: 36px 20px;
+  text-align: center;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: all .2s;
+  margin-top: 14px;
+}
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--brand);
+  background: var(--surface);
+}
+.dropzone-icon {
+  font-size: 2.8rem;
+  margin-bottom: 8px;
+}

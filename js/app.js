@@ -461,7 +461,8 @@ function renderFicha(id) {
   <nav class="fnav no-print"><a class="btn small" href="#/fichas">← Catálogo</a>
     <span><a class="btn small" href="#/ficha/${prev.id}" title="${esc(prev.n)}">‹ ${prev.sin ? 'S/O ' + prev.id.slice(1) : prev.id}</a>
     <a class="btn small" href="#/ficha/${next.id}" title="${esc(next.n)}">${next.sin ? 'S/O ' + next.id.slice(1) : next.id} ›</a>
-    <a class="btn small primary" href="pdf/declaratoria_${b.id}.pdf" download="declaratoria_${b.id}.pdf" target="_blank" title="Descargar cédula oficial de declaratoria en PDF">📄 Descargar PDF Declaratoria</a>
+    <a class="btn small primary" href="pdf/declaratoria_${b.id}.pdf" download="declaratoria_${b.id}.pdf" target="_blank" title="Descargar cédula oficial de declaratoria en PDF">📄 Descargar PDF</a>
+    ${b.docxDriveUrl ? `<a class="btn small" href="${esc(b.docxDriveUrl)}" target="_blank" rel="noopener" title="Abrir archivo original en Word (.docx) en Google Drive">📝 Ordenanza Word (.docx)</a>` : ''}
     <button class="btn small" id="shareFichaBtn" title="Compartir o copiar enlace">Compartir</button>
     <button class="btn small" onclick="window.print()">Imprimir ficha</button></span></nav>
   <header class="fhead"><div>
@@ -484,6 +485,7 @@ function renderFicha(id) {
       ${b.dict ? `<span><b>Dictamen CMAPCSAG:</b> ${esc(b.dict)}</span>` : ''}
     </div>
     <p class="norma-text">«${esc(b.fund || b.res || 'Declarado integrante del patrimonio cultural municipal.')}»</p>
+    ${b.docxDriveUrl ? `<div style="margin-top:10px;font-size:0.8rem;color:var(--ink-2)"><b>Documento oficial original:</b> <a href="${esc(b.docxDriveUrl)}" target="_blank" rel="noopener" style="text-decoration:underline;color:var(--brand)">${esc(b.docxTitle || 'Abrir Ordenanza en Word (.docx)')} ↗</a></div>` : ''}
   </div>
   <div class="tutela-box">
     <h4>Control y Tutela Institucional (CMAPCSAG)</h4>
@@ -1960,6 +1962,135 @@ boot().catch(err => {
 });
 
 /* ------------ gestión y control (CMAPCSAG) ------------ */
+
+/* ------------ extracción inteligente de documentos word ------------ */
+async function extractTextFromDocx(file) {
+  if (file.name.endsWith('.txt')) {
+    return await file.text();
+  }
+  if (typeof JSZip === 'undefined') {
+    throw new Error('La librería JSZip no está disponible.');
+  }
+  const arrayBuffer = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const docFile = zip.file('word/document.xml');
+  if (!docFile) {
+    throw new Error('El archivo no contiene un documento Word válido (word/document.xml).');
+  }
+  const xml = await docFile.async('text');
+  const clean = xml
+    .replace(/<\/w:p>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  return clean.trim();
+}
+
+function analyzeNormaText(docText) {
+  const t = docText;
+  
+  // 1. Tipo de documento y número
+  const ordMatch = t.match(/ORDENANZA\s+(?:N[º°\.\s]*)?([0-9]+[\s\/\-_]*[0-9]*)/i);
+  const decMatch = t.match(/DECRETO\s+(?:N[º°\.\s]*)?([0-9]+[\s\/\-_]*[0-9]*)/i);
+  const expMatch = t.match(/(?:Expte\.?|Expediente)\s+(?:H\.?C\.?D\.?|D\.?E\.?|Municipal)?\s*(?:N[º°\.\s]*)?([0-9\-\/A-Za-z]+)/i);
+  
+  let tipoDoc = ordMatch ? 'ordenanza' : 'expediente';
+  let norma = ordMatch ? 'Ordenanza ' + ordMatch[1].trim() : (decMatch ? 'Decreto ' + decMatch[1].trim() : (expMatch ? expMatch[0].trim() : 'Norma en trámite'));
+  
+  // 2. Año
+  let anio = new Date().getFullYear();
+  const anioMatch = (norma + ' ' + t.slice(0, 1000)).match(/\b(19[89]\d|20[0-3]\d)\b/);
+  if (anioMatch) anio = parseInt(anioMatch[1]);
+  
+  // 3. Artículo declaratorio
+  const artMatch = t.match(/(ART[ÍI]CULO\s+\d+[º°]?:?\s*(?:Decl[áa]rase|Incorp[oó]rase)[^\n\.]+)/i) ||
+                   t.match(/(ART[ÍI]CULO\s+1[º°]?:?[^\n\.]+)/i);
+  let articulo = artMatch ? artMatch[0].trim() : 'Art. 1º';
+  
+  // 4. Decreto D.E.
+  let decreto = decMatch ? 'Decreto ' + decMatch[1].trim() : '';
+  
+  // 5. Expediente HCD
+  let expte = expMatch ? expMatch[0].trim() : '';
+  
+  // 6. Catastro
+  const catMatch = t.match(/(Circ(?:unscripci[oó]n)?\.?\s*[IVX0-9]+[^,\n\.]*(?:Secc(?:i[oó]n)?\.?\s*[A-Z0-9]+)?[^,\n\.]*(?:Mz|Manzana)?\.?[^,\n\.]*(?:Parc(?:ela)?\.?\s*[0-9]+)?)/i);
+  let catastro = catMatch ? catMatch[0].trim() : '';
+  
+  // 7. Localidad
+  const locs = ['Azcuénaga', 'Cucullú', 'Villa Ruiz', 'Villa Espil', 'Solís', 'Tuyutí', 'Franklin', 'San Andrés de Giles'];
+  let localidad = 'San Andrés de Giles';
+  for (const l of locs) {
+    if (new RegExp('\\b' + l + '\\b', 'i').test(t)) {
+      localidad = l;
+      break;
+    }
+  }
+  
+  // 8. Categoría Art. 4º
+  let categoria = 'Histórico-Simbólico';
+  if (/arquitect[oó]nic|estilo|fachada|edifici/i.test(t)) categoria = 'Artístico-Arquitectónico';
+  else if (/ambiental|urban[íi]stic|plaza|arbolado|reserva/i.test(t)) categoria = 'Urbanístico-Ambiental';
+  else if (/inmaterial|tradici[oó]n|saber|fiesta|vigilia/i.test(t)) categoria = 'Patrimonio Inmaterial';
+  
+  // 9. Fundamento o considerandos
+  let fundamento = '';
+  const consMatch = t.match(/CONSIDERANDO:?([\s\S]*?)(?:POR ELLO|EL HONORABLE|EL INTENDENTE|ART[ÍI]CULO)/i);
+  if (consMatch) {
+    fundamento = consMatch[1].replace(/\s+/g, ' ').trim().slice(0, 500);
+  } else if (artMatch) {
+    fundamento = artMatch[0].trim();
+  }
+  
+  // 10. Detección y emparejamiento con bienes existentes
+  let matchedBien = null;
+  let bestScore = 0;
+  
+  // Buscamos primero en los pendientes sin ordenanza
+  const candidatos = BIENES;
+  for (const b of candidatos) {
+    let score = 0;
+    const tokens = b.n.toLowerCase().split(/[\s,"'«»()\-]+/).filter(w => w.length > 3 && !['antiguo','antigua','casa','edificio','paraje','calle','posta'].includes(w));
+    for (const tok of tokens) {
+      if (t.toLowerCase().includes(tok)) score += 2;
+    }
+    if (b.cat && t.includes(b.cat)) score += 5;
+    if (score > bestScore) {
+      bestScore = score;
+      matchedBien = b;
+    }
+  }
+  
+  // Nombre tentativo si es nuevo
+  let nombrePropuesto = '';
+  const nomMatch = t.match(/Decl[áa]rase[^\n]*?\s+a\s+(?:la|el|los|las)?\s*([A-ZÁÉÍÓÚÑ][^,\n\.]+?)(?:,\s*sita|,\s*ubicad|\s+sita|\s+ubicad|\.\s*|\n)/i);
+  if (nomMatch) {
+    nombrePropuesto = nomMatch[1].trim();
+  } else if (matchedBien) {
+    nombrePropuesto = matchedBien.n;
+  } else {
+    nombrePropuesto = 'Bien declarado por ' + norma;
+  }
+  
+  return {
+    tipoDoc,
+    norma,
+    anio,
+    articulo,
+    decreto,
+    expte,
+    catastro,
+    localidad,
+    categoria,
+    fundamento,
+    matchedBien: bestScore >= 2 ? matchedBien : null,
+    nombrePropuesto
+  };
+}
+
 function renderGestion() {
   // Tabs internas de gestión
   $$('.gtab-btn').forEach(btn => {
@@ -2143,134 +2274,191 @@ function renderGestion() {
   }
 
   // -------------------------------------------------------------
-  // MÓDULO DE CARGA: LÓGICA DE FORMULARIOS Y PERSISTENCIA
+  // MÓDULO DE CARGA INTELIGENTE: WORD (.DOCX) Y ASIGNACIÓN
   // -------------------------------------------------------------
 
-  // Poblar select de asientos a perfeccionar
-  const ordSelect = $('#ordAsientoSelect');
-  if (ordSelect) {
-    ordSelect.innerHTML = BIENES.map(b => {
-      const tag = b.sin ? '⚠️ [PENDIENTE ART. 8º]' : (String(b.id).startsWith('EXP-') ? '📁 [EXPEDIENTE]' : '🏛️');
-      return `<option value="${b.id}">${tag} Asiento ${b.id}: ${esc(b.n)} (${esc(b.loc)})</option>`;
-    }).join('');
-  }
+  const dropzone = $('#docDropzone');
+  const fileInput = $('#docxFileInput');
+  const togglePaste = $('#togglePasteText');
+  const pasteContainer = $('#pasteTextContainer');
+  const btnAnalizarTexto = $('#btnAnalizarTexto');
+  const cardResultado = $('#cardResultadoExtraccion');
+  const bannerCoincidencia = $('#bannerCoincidencia');
+  const asignSelect = $('#extAsignarBienSelect');
 
-  // Switch de modalidad en Formulario 2
-  const ordModalidad = $('#ordModalidad');
-  if (ordModalidad) {
-    ordModalidad.onchange = () => {
-      const isNuevo = ordModalidad.value === 'nuevo';
-      $('#ordGrupoAsiento').style.display = isNuevo ? 'none' : 'block';
-      $('#ordGrupoNuevoBien').style.display = isNuevo ? 'block' : 'none';
+  // Alternar pegar texto
+  if (togglePaste && !togglePaste._bound) {
+    togglePaste._bound = true;
+    togglePaste.onclick = (e) => {
+      e.preventDefault();
+      pasteContainer.style.display = pasteContainer.style.display === 'none' ? 'block' : 'none';
     };
   }
 
-  // Submit Formulario 1: Nuevo Expediente
-  const formExp = $('#formNuevoExpediente');
-  if (formExp && !formExp._bound) {
-    formExp._bound = true;
-    formExp.onsubmit = e => {
-      e.preventDefault();
-      const customList = loadCustomData();
-      const expCount = customList.filter(c => String(c.id).startsWith('EXP-')).length + 1;
-      const newId = 'EXP-' + expCount;
+  // Poblar select de asignación
+  function poblarSelectAsignacion(selectedId = null) {
+    if (!asignSelect) return;
+    const sinOrd = BIENES.filter(b => b.sin);
+    const otros = BIENES.filter(b => !b.sin);
 
-      let pt = null;
-      const coordsVal = $('#expCoords').value.trim();
-      if (coordsVal) {
-        const parts = coordsVal.split(',').map(s => parseFloat(s.trim()));
-        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-          pt = [parts[1], parts[0]]; // [lng, lat]
+    let html = '<option value="__NUEVO__">✨ [NUEVO] Declarar como Nuevo Bien Patrimonial</option>';
+    if (sinOrd.length > 0) {
+      html += '<optgroup label="⚠️ Asientos Pendientes de Ordenanza (Art. 8º)">';
+      sinOrd.forEach(b => {
+        html += `<option value="${b.id}">Asiento ${b.id}: ${esc(b.n)} (${esc(b.loc)})</option>`;
+      });
+      html += '</optgroup>';
+    }
+    html += '<optgroup label="🏛️ Asientos del Registro Definitivo">';
+    otros.forEach(b => {
+      html += `<option value="${b.id}">Asiento ${b.id}: ${esc(b.n)} (${esc(b.loc)})</option>`;
+    });
+    html += '</optgroup>';
+    asignSelect.innerHTML = html;
+    if (selectedId) asignSelect.value = selectedId;
+  }
+  poblarSelectAsignacion();
+
+  // Procesar texto extraído y rellenar formulario de confirmación
+  function presentarResultadoExtraccion(docText) {
+    const ext = analyzeNormaText(docText);
+
+    $('#extTipoDoc').value = ext.tipoDoc;
+    $('#extNorma').value = ext.norma;
+    $('#extAnio').value = ext.anio;
+    $('#extArticulo').value = ext.articulo;
+    $('#extDecreto').value = ext.decreto;
+    $('#extExpte').value = ext.expte;
+    $('#extNombreBien').value = ext.nombrePropuesto;
+    $('#extLocalidad').value = ext.localidad;
+    $('#extCategoria').value = ext.categoria;
+    $('#extCatastro').value = ext.catastro;
+    $('#extFundamento').value = ext.fundamento;
+
+    if (ext.matchedBien) {
+      poblarSelectAsignacion(ext.matchedBien.id);
+      bannerCoincidencia.className = 'box ok';
+      bannerCoincidencia.innerHTML = `<b>🎯 Coincidencia automática detectada:</b> Se identificó el <b>Asiento Nº ${ext.matchedBien.id} — ${esc(ext.matchedBien.n)}</b> (${esc(ext.matchedBien.loc)}). El sistema asignará esta norma para perfeccionar su registro oficial.`;
+    } else {
+      poblarSelectAsignacion('__NUEVO__');
+      bannerCoincidencia.className = 'box info';
+      bannerCoincidencia.innerHTML = `<b>✨ Nuevo bien patrimonial detectado:</b> No se encontró un asiento previo coincidente. Se creará una nueva ficha incorporada al Registro Oficial.`;
+    }
+
+    // Al cambiar el select manualmente, sincronizar campos si corresponde
+    asignSelect.onchange = () => {
+      if (asignSelect.value === '__NUEVO__') {
+        $('#extNombreBien').value = ext.nombrePropuesto;
+      } else {
+        const b = BY[asignSelect.value];
+        if (b) {
+          $('#extNombreBien').value = b.n;
+          $('#extLocalidad').value = b.loc;
+          if (b.cat) $('#extCatastro').value = b.cat;
         }
       }
+    };
 
-      const nuevoExp = {
-        id: newId,
-        n: $('#expNombre').value.trim(),
-        loc: $('#expLocalidad').value,
-        locRaw: $('#expLocalidad').value,
-        ubi: $('#expUbicacion').value.trim(),
-        cat: $('#expCatastro').value.trim(),
-        catSrc: 'Expediente preliminar',
-        tipo: $('#expTipo').value,
-        cats: [$('#expCategoria').value],
-        catTxt: $('#expCategoria').value,
-        norma: 'En trámite (' + $('#expNumero').value.trim() + ')',
-        anio: new Date().getFullYear(),
-        art: 'Trámite de Declaratoria',
-        estado: $('#expEstado').value,
-        exp: $('#expNumero').value.trim(),
-        dict: $('#expEstado').value,
-        reg: 'Art. 8º Ord. 2182/19 (Registro Preventivo)',
-        fund: $('#expFundamento').value.trim(),
-        obs: 'Iniciador: ' + $('#expIniciador').value.trim() + '. Fecha de ingreso: ' + new Date().toLocaleDateString('es-AR'),
-        res: $('#expFundamento').value.trim(),
-        datos: ['Iniciador: ' + $('#expIniciador').value.trim(), 'Expediente: ' + $('#expNumero').value.trim()],
-        sin: true,
-        pt: pt,
-        lsrc: pt ? 'Coordenadas declaradas' : 'Sin coordenadas',
-        pc: $('#expCatastro').value.trim(),
-        custom: true,
-        fechaCarga: new Date().toISOString()
-      };
+    cardResultado.style.display = 'block';
+    cardResultado.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
-      customList.push(nuevoExp);
-      saveCustomData(customList);
-      BIENES.push(nuevoExp);
-      BY[newId] = nuevoExp;
+  // Manejador de archivo Word subido
+  async function manejarArchivoWord(file) {
+    if (!file) return;
+    try {
+      bannerCoincidencia.className = 'box info';
+      bannerCoincidencia.innerHTML = '⏳ Procesando archivo Word: <b>' + esc(file.name) + '</b>...';
+      cardResultado.style.display = 'block';
+      const text = await extractTextFromDocx(file);
+      presentarResultadoExtraccion(text);
+    } catch (err) {
+      alert('Error al leer el archivo Word: ' + err.message);
+      cardResultado.style.display = 'none';
+    }
+  }
 
-      formExp.reset();
-      alert('✅ Expediente ' + nuevoExp.exp + ' registrado con éxito como asiento ' + newId + '.');
-      renderGestion();
+  // Drag & drop en dropzone
+  if (dropzone && !dropzone._bound) {
+    dropzone._bound = true;
+    ['dragenter', 'dragover'].forEach(eName => {
+      dropzone.addEventListener(eName, e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(eName => {
+      dropzone.addEventListener(eName, e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+    });
+    dropzone.addEventListener('drop', e => {
+      const files = e.dataTransfer.files;
+      if (files && files[0]) manejarArchivoWord(files[0]);
+    });
+    fileInput.addEventListener('change', e => {
+      if (fileInput.files && fileInput.files[0]) manejarArchivoWord(fileInput.files[0]);
+    });
+  }
+
+  // Botón Analizar Texto Pegado
+  if (btnAnalizarTexto && !btnAnalizarTexto._bound) {
+    btnAnalizarTexto._bound = true;
+    btnAnalizarTexto.onclick = () => {
+      const txt = $('#pastedDocText').value.trim();
+      if (!txt) return alert('Por favor pegue el texto de la norma o expediente a analizar.');
+      presentarResultadoExtraccion(txt);
     };
   }
 
-  // Submit Formulario 2: Nueva Ordenanza
-  const formOrd = $('#formNuevaOrdenanza');
-  if (formOrd && !formOrd._bound) {
-    formOrd._bound = true;
-    formOrd.onsubmit = e => {
-      e.preventDefault();
+  // Botón Cancelar Asignación
+  const btnCancelar = $('#btnCancelarAsignacion');
+  if (btnCancelar && !btnCancelar._bound) {
+    btnCancelar._bound = true;
+    btnCancelar.onclick = () => {
+      cardResultado.style.display = 'none';
+      if (fileInput) fileInput.value = '';
+    };
+  }
+
+  // Botón Confirmar Asignación e Incorporación
+  const btnConfirmar = $('#btnConfirmarAsignacion');
+  if (btnConfirmar && !btnConfirmar._bound) {
+    btnConfirmar._bound = true;
+    btnConfirmar.onclick = () => {
+      const targetVal = asignSelect.value;
       const customList = loadCustomData();
-      const modalidad = $('#ordModalidad').value;
-      const numOrd = $('#ordNumero').value.trim();
-      const anioOrd = parseInt($('#ordAnio').value) || new Date().getFullYear();
-      const artOrd = $('#ordArticulo').value.trim();
-      const decOrd = $('#ordDecreto').value.trim();
-      const catOrd = $('#ordCatastro').value.trim();
-      const expOrd = $('#ordExpte').value.trim();
-      const fundOrd = $('#ordFundamento').value.trim();
+      const numNorma = $('#extNorma').value.trim();
+      const anioNorma = parseInt($('#extAnio').value) || new Date().getFullYear();
+      const artNorma = $('#extArticulo').value.trim();
+      const decNorma = $('#extDecreto').value.trim();
+      const expNorma = $('#extExpte').value.trim();
+      const catNorma = $('#extCatastro').value.trim();
+      const fundNorma = $('#extFundamento').value.trim();
+      const tipoDoc = $('#extTipoDoc').value;
 
-      if (modalidad === 'perfeccionar') {
-        const targetId = $('#ordAsientoSelect').value;
-        const b = BY[targetId];
-        if (!b) return alert('No se encontró el bien seleccionado.');
+      if (targetVal !== '__NUEVO__') {
+        // Perfeccionar Asiento Existente
+        const b = BY[targetVal];
+        if (!b) return alert('No se encontró el bien a actualizar.');
 
-        b.norma = numOrd;
-        b.anio = anioOrd;
-        b.art = artOrd;
-        if (decOrd) b.dec = decOrd;
-        if (expOrd) b.exp = expOrd;
-        if (catOrd) { b.cat = catOrd; b.catSrc = 'Ordenanza ' + numOrd; }
-        b.fund = fundOrd;
-        b.estado = 'Definitivo';
-        b.sin = false;
-        b.reg = 'Ordenanza Nº 2182/19 (Registro Definitivo)';
-        b.obs = (b.obs ? b.obs + ' · ' : '') + 'Perfeccionado por ' + numOrd + ' el ' + new Date().toLocaleDateString('es-AR');
+        b.norma = numNorma;
+        b.anio = anioNorma;
+        b.art = artNorma;
+        if (decNorma) b.dec = decNorma;
+        if (expNorma) b.exp = expNorma;
+        if (catNorma) { b.cat = catNorma; b.catSrc = 'Ordenanza ' + numNorma; }
+        b.fund = fundNorma;
+        b.estado = tipoDoc === 'ordenanza' ? 'Definitivo' : 'Preventivo';
+        b.sin = tipoDoc !== 'ordenanza';
+        b.reg = tipoDoc === 'ordenanza' ? 'Ordenanza Nº 2182/19 (Registro Definitivo)' : 'Registro Preventivo (Art. 8º)';
+        b.obs = (b.obs ? b.obs + ' · ' : '') + 'Actualizado por ' + numNorma + ' el ' + new Date().toLocaleDateString('es-AR');
         b.custom = true;
         b.fechaModif = new Date().toISOString();
 
-        // Actualizar o agregar en customList
-        const existingIdx = customList.findIndex(c => String(c.id) === String(targetId));
-        if (existingIdx >= 0) {
-          customList[existingIdx] = Object.assign({}, customList[existingIdx], b);
-        } else {
-          customList.push(b);
-        }
+        const existingIdx = customList.findIndex(c => String(c.id) === String(targetVal));
+        if (existingIdx >= 0) customList[existingIdx] = Object.assign({}, customList[existingIdx], b);
+        else customList.push(b);
         saveCustomData(customList);
-        alert('⚖️ Ordenanza ' + numOrd + ' asignada al Asiento ' + targetId + '. El bien ha sido incorporado al Registro Definitivo.');
+
+        alert('⚖️ Asiento Nº ' + targetVal + ' (' + b.n + ') actualizado con éxito con la norma ' + numNorma + '.');
       } else {
-        // Nuevo Bien por Ordenanza
+        // Nuevo Bien
         const maxNumId = BIENES.reduce((max, cur) => {
           const num = parseInt(cur.id);
           return (!isNaN(num) && num > max) ? num : max;
@@ -2279,28 +2467,28 @@ function renderGestion() {
 
         const nuevoBien = {
           id: newId,
-          n: $('#ordNuevoNombre').value.trim(),
-          loc: $('#ordNuevaLoc').value,
-          locRaw: $('#ordNuevaLoc').value,
-          ubi: $('#ordNuevaUbi').value.trim(),
-          cat: catOrd,
-          catSrc: catOrd ? 'Ordenanza ' + numOrd : 'Sin catastro en ordenanza',
+          n: $('#extNombreBien').value.trim() || ('Bien ' + numNorma),
+          loc: $('#extLocalidad').value,
+          locRaw: $('#extLocalidad').value,
+          ubi: 'San Andrés de Giles',
+          cat: catNorma,
+          catSrc: catNorma ? numNorma : 'Sin catastro asignado',
           tipo: 'Inmueble / Bien patrimonial',
-          cats: [$('#ordNuevaCat').value],
-          catTxt: $('#ordNuevaCat').value,
-          norma: numOrd,
-          anio: anioOrd,
-          art: artOrd,
-          dec: decOrd,
-          estado: 'Definitivo',
-          exp: expOrd,
-          dict: 'Favorable CMAPCSAG',
-          reg: 'Ordenanza Nº 2182/19 (Registro Definitivo)',
-          fund: fundOrd,
-          obs: 'Declarado por ' + numOrd + ' el ' + new Date().toLocaleDateString('es-AR'),
-          res: fundOrd,
-          datos: ['Ordenanza: ' + numOrd, 'Artículo: ' + artOrd],
-          sin: false,
+          cats: [$('#extCategoria').value],
+          catTxt: $('#extCategoria').value,
+          norma: numNorma,
+          anio: anioNorma,
+          art: artNorma,
+          dec: decNorma,
+          estado: tipoDoc === 'ordenanza' ? 'Definitivo' : 'Preventivo',
+          exp: expNorma,
+          dict: 'CMAPCSAG',
+          reg: tipoDoc === 'ordenanza' ? 'Ordenanza Nº 2182/19 (Registro Definitivo)' : 'Registro Preventivo (Art. 8º)',
+          fund: fundNorma,
+          obs: 'Incorporado a partir de archivo Word el ' + new Date().toLocaleDateString('es-AR'),
+          res: fundNorma,
+          datos: ['Norma: ' + numNorma, 'Artículo: ' + artNorma],
+          sin: tipoDoc !== 'ordenanza',
           custom: true,
           fechaCarga: new Date().toISOString()
         };
@@ -2309,10 +2497,13 @@ function renderGestion() {
         saveCustomData(customList);
         BIENES.push(nuevoBien);
         BY[newId] = nuevoBien;
-        alert('⚖️ Nuevo bien declarado e incorporado al Registro Definitivo como Asiento ' + newId + '.');
+
+        alert('⚖️ Nuevo bien (' + nuevoBien.n + ') incorporado al Registro Oficial como Asiento Nº ' + newId + '.');
       }
 
-      formOrd.reset();
+      cardResultado.style.display = 'none';
+      if (fileInput) fileInput.value = '';
+      $('#pastedDocText').value = '';
       renderGestion();
     };
   }
@@ -2322,7 +2513,7 @@ function renderGestion() {
   if (tablaMovEl) {
     const customList = loadCustomData();
     if (customList.length === 0) {
-      tablaMovEl.innerHTML = '<p class="muted">No hay expedientes u ordenanzas cargadas localmente durante esta sesión. Utilice los formularios superiores para ingresar nuevas actuaciones.</p>';
+      tablaMovEl.innerHTML = '<p class="muted">No hay ordenanzas o expedientes cargados durante esta sesión. Arrastrá un archivo Word (.docx) o pegá el texto arriba para procesar novedades.</p>';
     } else {
       tablaMovEl.innerHTML = `
         <table class="alert-table">
@@ -2372,7 +2563,7 @@ function renderGestion() {
   if (btnReset && !btnReset._bound) {
     btnReset._bound = true;
     btnReset.onclick = () => {
-      if (confirm('¿Está seguro de restablecer el Registro a los datos oficiales de fábrica? Se borrarán los expedientes u ordenanzas cargados localmente en este navegador.')) {
+      if (confirm('¿Está seguro de restablecer el Registro a los datos oficiales de fábrica? Se borrarán las actuaciones cargadas localmente en este navegador.')) {
         localStorage.removeItem('sag_patrimonio_custom_v1');
         location.reload();
       }
@@ -2386,5 +2577,6 @@ function renderGestion() {
     expBtn.onclick = () => exportGeoJSON(BIENES);
   }
 }
+
 
 })();

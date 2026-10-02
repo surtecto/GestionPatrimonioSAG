@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="css/styles.css?v=2.3">
+<link rel="stylesheet" href="css/styles.css?v=2.4">
 <script>
   // Limpieza inmediata de Service Worker y caché antigua
   if ('serviceWorker' in navigator) {
@@ -188,7 +188,7 @@
         <button class="gtab-btn on" data-gtab="tablero">📊 Tablero de Indicadores</button>
         <button class="gtab-btn" data-gtab="alertas">⚠️ Semáforo y Alertas</button>
         <button class="gtab-btn" data-gtab="auditoria">🔍 Auditoría del Corpus</button>
-        <button class="gtab-btn" data-gtab="carga">➕ Carga de Expedientes y Ordenanzas</button>
+        <button class="gtab-btn" data-gtab="carga">📄 Carga de Archivos Word (.docx)</button>
         <button class="gtab-btn" data-gtab="informes">📄 Informes y Descargas PDF</button>
       </div>
 
@@ -246,191 +246,121 @@
         </article>
       </div>
 
-      <!-- Pestaña: Carga de Expedientes y Ordenanzas -->
+      <!-- Pestaña: Carga y Procesamiento de Archivos Word (.docx) -->
       <div class="gtab-content" id="gtab-carga">
-        <div class="grid2">
-          <!-- Formulario 1: Nuevo Expediente en Estudio -->
-          <article class="panel">
-            <div class="panel-head">
-              <h2>📁 1. Cargar Nuevo Expediente a Declarar</h2>
-              <span class="pill c2">Mesa de Entradas · Registro Preventivo</span>
-            </div>
-            <p class="muted">Registra una solicitud de particulares, entidades o concejales para su evaluación por la Comisión Municipal Asesora (Art. 8º Ord. 2182/19):</p>
-            
-            <form id="formNuevoExpediente" class="form-gestion">
-              <div class="form-row">
-                <label>Nº de Expediente Administrativo:
-                  <input type="text" id="expNumero" placeholder="Ej. Expte. HCD 4102-124/2026" required>
-                </label>
-                <label>Iniciador / Solicitante:
-                  <input type="text" id="expIniciador" placeholder="Ej. Vecinos de Azcuénaga / CMAPCSAG" required>
-                </label>
-              </div>
+        <article class="panel">
+          <div class="panel-head">
+            <h2>📄 Carga Inteligente de Archivos Word (.docx) y Expedientes</h2>
+            <span class="pill c3">Procesamiento y Asignación Automática</span>
+          </div>
+          <p class="muted">Arrastrá o seleccioná un archivo de formato Word (<code>.docx</code>) o pegá el texto de una Ordenanza, Decreto o Expediente. El sistema extraerá automáticamente el número de norma, fecha, articulado, catastro, fundamentación y asignará a qué bien corresponde:</p>
+          
+          <!-- Dropzone Word -->
+          <div class="dropzone" id="docDropzone">
+            <div class="dropzone-icon">📄</div>
+            <p><b>Arrastrá aquí tu archivo Word (.docx)</b> o hacé clic para seleccionarlo</p>
+            <input type="file" id="docxFileInput" accept=".docx,.txt" style="display:none">
+            <button type="button" class="btn small primary" onclick="$('#docxFileInput').click()">Examinar archivo Word (.docx)</button>
+            <span class="muted" style="display:block;margin-top:10px;font-size:0.82rem">También podés <a href="#" id="togglePasteText" style="text-decoration:underline">pegar el texto directamente</a></span>
+          </div>
 
-              <div class="form-row">
-                <label>Denominación del Bien propuesto:
-                  <input type="text" id="expNombre" placeholder="Ej. Almacén de Ramos Generales 'El Progreso'" required>
-                </label>
-                <label>Localidad / Paraje:
-                  <select id="expLocalidad" required>
-                    <option value="San Andrés de Giles">San Andrés de Giles</option>
-                    <option value="Azcuénaga">Azcuénaga</option>
-                    <option value="Cucullú">Cucullú</option>
-                    <option value="Villa Ruiz">Villa Ruiz</option>
-                    <option value="Villa Espil">Villa Espil</option>
-                    <option value="Solís">Solís</option>
-                    <option value="Tuyutí">Tuyutí</option>
-                    <option value="Franklin">Franklin</option>
-                    <option value="Rural / Todo el Partido">Rural / Todo el Partido</option>
-                  </select>
-                </label>
-              </div>
+          <!-- Opción Pegar Texto -->
+          <div id="pasteTextContainer" style="display:none;margin-top:16px;background:var(--surface-2);padding:16px;border-radius:var(--r);border:1px solid var(--line)">
+            <label style="display:block;font-weight:600;font-size:0.85rem;margin-bottom:6px">Pegar texto de la Ordenanza o Expediente:
+              <textarea id="pastedDocText" rows="6" style="width:100%" placeholder="Pegá aquí el texto completo del documento Word o dictamen..."></textarea>
+            </label>
+            <button type="button" class="btn small primary mt" id="btnAnalizarTexto">🔍 Analizar Documento y Extraer Información</button>
+          </div>
 
-              <div class="form-row">
-                <label>Ubicación / Dirección:
-                  <input type="text" id="expUbicacion" placeholder="Ej. Av. Scully y Av. Morgan">
-                </label>
-                <label>Nomenclatura Catastral y Partida (si se conoce):
-                  <input type="text" id="expCatastro" placeholder="Ej. Circ. II, Secc. B, Mz. 14, Parc. 3 · Partida 083-001234">
-                </label>
-              </div>
+          <!-- Tarjeta de Resultado y Asignación al Bien -->
+          <div id="cardResultadoExtraccion" style="display:none;margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
+            <div class="box ok" id="bannerCoincidencia"></div>
 
-              <div class="form-row">
-                <label>Categoría propuesta (Art. 4º):
-                  <select id="expCategoria" required>
-                    <option value="Histórico-Simbólico">Histórico-Simbólico</option>
-                    <option value="Artístico-Arquitectónico">Artístico-Arquitectónico</option>
-                    <option value="Urbanístico-Ambiental">Urbanístico-Ambiental</option>
-                    <option value="Patrimonio Inmaterial">Manifestación del Patrimonio Inmaterial</option>
-                  </select>
-                </label>
-                <label>Tipo de bien:
-                  <select id="expTipo" required>
-                    <option value="Inmueble">Inmueble / Arquitectura</option>
-                    <option value="Espacio urbano / Paisaje">Espacio urbano / Paisaje</option>
-                    <option value="Monumento / Escultura">Monumento / Escultura</option>
-                    <option value="Mueble / Colección">Mueble / Colección histórica</option>
-                    <option value="Sitio histórico">Sitio histórico / Arqueológico</option>
-                    <option value="Patrimonio Inmaterial">Patrimonio Inmaterial / Saber tradicional</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="form-row">
-                <label>Estado del Trámite / Dictamen de la Comisión:
-                  <select id="expEstado" required>
-                    <option value="En estudio de Comisión">🟡 En estudio técnico de la Comisión</option>
-                    <option value="Con Registro Preventivo">🟠 Con Registro Preventivo de no innovar (Art. 8º)</option>
-                    <option value="Con Dictamen Favorable">🟢 Con Dictamen Favorable (Elevado al HCD)</option>
-                    <option value="Con Dictamen Desfavorable">🔴 Con Dictamen Desfavorable (Rechazado)</option>
-                  </select>
-                </label>
-                <label>Coordenadas (Latitud, Longitud) [Opcional]:
-                  <input type="text" id="expCoords" placeholder="-34.445123, -59.442111">
-                </label>
-              </div>
-
-              <label>Fundamentación preliminar del valor patrimonial:
-                <textarea id="expFundamento" rows="3" placeholder="Descripción histórica, arquitectónica o testimonial que justifica el inicio de actuaciones..." required></textarea>
-              </label>
-
-              <button type="submit" class="btn primary mt">📥 Registrar Expediente en el Sistema</button>
-            </form>
-          </article>
-
-          <!-- Formulario 2: Nueva Ordenanza Sancionada -->
-          <article class="panel">
-            <div class="panel-head">
-              <h2>⚖️ 2. Cargar Nueva Ordenanza Sancionada</h2>
-              <span class="pill c3">H.C.D. · Registro Definitivo</span>
-            </div>
-            <p class="muted">Incorpora un bien al Registro Definitivo o perfecciona un asiento sin ordenanza formal con el instrumento sancionado por el H.C.D.:</p>
-
-            <form id="formNuevaOrdenanza" class="form-gestion">
-              <label>Modalidad de Incorporación:
-                <select id="ordModalidad" required>
-                  <option value="perfeccionar">Asignar Ordenanza a un Asiento Existente (Regularización)</option>
-                  <option value="nuevo">Declarar un Nuevo Bien directamente por Ordenanza</option>
-                </select>
-              </label>
-
-              <div id="ordGrupoAsiento">
-                <label>Seleccionar Asiento o Expediente a perfeccionar:
-                  <select id="ordAsientoSelect"></select>
-                </label>
-              </div>
-
-              <div id="ordGrupoNuevoBien" style="display:none">
-                <div class="form-row">
-                  <label>Denominación del Nuevo Bien:
-                    <input type="text" id="ordNuevoNombre" placeholder="Ej. Antigua Usina Eléctrica Municipal">
-                  </label>
-                  <label>Localidad:
-                    <select id="ordNuevaLoc">
-                      <option value="San Andrés de Giles">San Andrés de Giles</option>
-                      <option value="Azcuénaga">Azcuénaga</option>
-                      <option value="Cucullú">Cucullú</option>
-                      <option value="Villa Ruiz">Villa Ruiz</option>
-                      <option value="Villa Espil">Villa Espil</option>
-                      <option value="Solís">Solís</option>
-                      <option value="Tuyutí">Tuyutí</option>
-                      <option value="Franklin">Franklin</option>
-                      <option value="Rural / Todo el Partido">Rural / Todo el Partido</option>
+            <div class="grid2 mt">
+              <div>
+                <h3 style="font-size:1rem;color:var(--brand)">Datos Jurídicos Extraídos</h3>
+                <div class="form-gestion">
+                  <label>Tipo de Documento:
+                    <select id="extTipoDoc">
+                      <option value="ordenanza">Ordenanza Sancionada (Registro Definitivo)</option>
+                      <option value="expediente">Expediente en Trámite (Registro Preventivo)</option>
                     </select>
                   </label>
-                </div>
-                <div class="form-row">
-                  <label>Ubicación / Dirección:
-                    <input type="text" id="ordNuevaUbi" placeholder="Ej. Calle 25 de Mayo 123">
+                  <label>Norma / Expediente:
+                    <input type="text" id="extNorma">
                   </label>
-                  <label>Categoría (Art. 4º):
-                    <select id="ordNuevaCat">
-                      <option value="Histórico-Simbólico">Histórico-Simbólico</option>
-                      <option value="Artístico-Arquitectónico">Artístico-Arquitectónico</option>
-                      <option value="Urbanístico-Ambiental">Urbanístico-Ambiental</option>
-                      <option value="Patrimonio Inmaterial">Manifestación del Patrimonio Inmaterial</option>
-                    </select>
-                  </label>
+                  <div class="form-row">
+                    <label>Año:
+                      <input type="number" id="extAnio">
+                    </label>
+                    <label>Artículo dispositivo:
+                      <input type="text" id="extArticulo">
+                    </label>
+                  </div>
+                  <div class="form-row">
+                    <label>Decreto de Promulgación:
+                      <input type="text" id="extDecreto">
+                    </label>
+                    <label>Expediente H.C.D.:
+                      <input type="text" id="extExpte">
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              <div class="form-row">
-                <label>Número y Año de la Ordenanza:
-                  <input type="text" id="ordNumero" placeholder="Ej. Ordenanza 2650/26" required>
-                </label>
-                <label>Año de Sanción:
-                  <input type="number" id="ordAnio" min="1980" max="2035" value="2026" required>
-                </label>
+              <div>
+                <h3 style="font-size:1rem;color:var(--brand)">Asignación al Patrimonio Municipal</h3>
+                <div class="form-gestion">
+                  <label>Acción de Asignación:
+                    <select id="extAsignarBienSelect"></select>
+                  </label>
+                  <label>Denominación del Bien:
+                    <input type="text" id="extNombreBien">
+                  </label>
+                  <div class="form-row">
+                    <label>Localidad:
+                      <select id="extLocalidad">
+                        <option value="San Andrés de Giles">San Andrés de Giles</option>
+                        <option value="Azcuénaga">Azcuénaga</option>
+                        <option value="Cucullú">Cucullú</option>
+                        <option value="Villa Ruiz">Villa Ruiz</option>
+                        <option value="Villa Espil">Villa Espil</option>
+                        <option value="Solís">Solís</option>
+                        <option value="Tuyutí">Tuyutí</option>
+                        <option value="Franklin">Franklin</option>
+                        <option value="Rural / Todo el Partido">Rural / Todo el Partido</option>
+                      </select>
+                    </label>
+                    <label>Categoría (Art. 4º):
+                      <select id="extCategoria">
+                        <option value="Histórico-Simbólico">Histórico-Simbólico</option>
+                        <option value="Artístico-Arquitectónico">Artístico-Arquitectónico</option>
+                        <option value="Urbanístico-Ambiental">Urbanístico-Ambiental</option>
+                        <option value="Patrimonio Inmaterial">Manifestación del Patrimonio Inmaterial</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label>Nomenclatura Catastral Oficial:
+                    <input type="text" id="extCatastro">
+                  </label>
+                </div>
               </div>
+            </div>
 
-              <div class="form-row">
-                <label>Artículo e Inciso dispositivo:
-                  <input type="text" id="ordArticulo" placeholder="Ej. Art. 1º inc. a" required>
-                </label>
-                <label>Decreto de Promulgación del D.E.:
-                  <input type="text" id="ordDecreto" placeholder="Ej. Decreto 412/26">
-                </label>
-              </div>
-
-              <div class="form-row">
-                <label>Nomenclatura Catastral Oficial (según Ordenanza):
-                  <input type="text" id="ordCatastro" placeholder="Ej. Circ. I, Secc. A, Mz. 10, Parc. 2">
-                </label>
-                <label>Expediente H.C.D. del que surge:
-                  <input type="text" id="ordExpte" placeholder="Ej. Expte. HCD 4102-98/2026">
-                </label>
-              </div>
-
-              <label>Texto exacto del Fundamento / Considerandos de la Ordenanza:
-                <textarea id="ordFundamento" rows="3" placeholder="Transcripción textual del articulado o considerandos que fundamentan la declaratoria..." required></textarea>
+            <div style="margin-top:14px">
+              <label style="display:block;font-weight:600;font-size:0.85rem;margin-bottom:4px">Fundamento Legal / Considerandos Extraídos:
+                <textarea id="extFundamento" rows="3" style="width:100%"></textarea>
               </label>
+            </div>
 
-              <button type="submit" class="btn primary mt">⚖️ Promulgar e Incorporar al Registro Definitivo</button>
-            </form>
-          </article>
-        </div>
+            <div style="display:flex;gap:12px;margin-top:16px;align-items:center;flex-wrap:wrap">
+              <button type="button" class="btn primary" id="btnConfirmarAsignacion">⚖️ Confirmar Asignación e Incorporar al Registro</button>
+              <button type="button" class="btn ghost small" id="btnCancelarAsignacion">Cancelar</button>
+            </div>
+          </div>
+        </article>
 
-        <!-- Tabla de Novedades y Expedientes en Trámite -->
+        <!-- Tabla de Movimientos y Expedientes -->
         <article class="panel mt">
           <div class="panel-head">
             <h2>📋 Movimientos y Expedientes Registrados Localmente</h2>
@@ -439,11 +369,10 @@
               <button class="btn small ghost" id="btnRestablecerGestion">↺ Restablecer Base Oficial</button>
             </div>
           </div>
-          <p class="muted">Lista de actuaciones ingresadas durante la sesión de trabajo. Quedan guardadas en el navegador y pueden exportarse para su posterior incorporación a la planilla del H.C.D.:</p>
+          <p class="muted">Lista de actuaciones ingresadas a partir de documentos Word o expedientes. Quedan guardadas en el navegador y pueden exportarse para consolidar la base del H.C.D.:</p>
           <div id="tablaMovimientosGestion"></div>
         </article>
       </div>
-
       <!-- Pestaña 4: Informes y Descargas PDF -->
       <div class="gtab-content" id="gtab-informes">
         <article class="panel">
@@ -653,6 +582,7 @@
 
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="js/app.js?v=2.3"></script>
+<script src="vendor/jszip.min.js"></script>
+  <script src="js/app.js?v=2.4"></script>
 </body>
 </html>
